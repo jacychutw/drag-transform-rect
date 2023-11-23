@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>
+      Walkers原生JS實現拖曳縮放元素
+    </title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.0/jquery.min.js" integrity="sha512-synHs+rLg2WDVE9U0oHVJURDCiqft60GcWOW7tXySy8oIr0Hjl3K9gv7Bq/gSj4NDVpc5vmsNkMGGJ6t2VpUMA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style type="text/css">
+      * {
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+      }
+      img {
+        user-select: none;
+        -moz-user-select: none;
+        -webkit-user-drag: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+      }
+    </style>
+</head>
+
+<body>
+    <span>
+      <img src="./walker_900x518.jpg" style="width: 900px; height: 518px;">
+    </span>
+    <div style="position: fixed; top:500px;"><button id="add-btn">新增一個框框</button></div>
+    <div style="position: fixed; top:540px;"><button id="delete-btn">刪除選到的框框</button></div>
+    <div style="position: fixed; top:580px;"><button id="clear-btn">清除所有框框</button></div>
+    <div style="position: fixed; top:620px;"><button id="reset-btn">回到預設</button></div>
+    <div style="position: fixed; top: 660px;"><button id="get-position-btn">印出目前框資訊</button></div>
+    <div id="all-frame" style="position: fixed; top:700px;"></div>
+</body>
+<script>
+    let imgHeight = 518;
+    let imgWidth = 900;
+    let id = 0;
+
+    $('#add-btn').on('click', function (e) {
+      let element = document.createElement('DIV');
+      element.id = id;
+      element.classList.add('frame');
+      element.style.cursor = 'move';
+      id++;
+      document.body.appendChild(element)
+
+      let dr = new CreateDragRect(document.getElementById(element.id), {
+        x: 100,
+        y: 100,
+        width: 100,
+        height: 100,
+      });
+      dr.bindDragEvent(document.getElementById(element.id));
+    });
+
+    $('#get-position-btn').on('click', function (e) {
+      let all = $(".frame").map(function() {
+        const id = this.id;
+        const width = this.style.width;
+        const height = this.style.height;
+        const top = this.style.top;
+        const left = this.style.left;
+        $('#all-frame').append(`<p>id: ${id} width: ${width} height: ${height} top: ${top} left: ${left}</p>`);
+      }).get();
+    });
+
+    $('#delete-btn').on('click', function (e) {
+      let myobjArr = document.getElementsByClassName("selectedicon");
+      if (myobjArr.length) {
+        myobjArr[0].remove();
+      }
+    });
+
+    $('#clear-btn').on('click', function (e) {
+      removeAll();
+    });
+
+    $('#reset-btn').on('click', function (e) {
+      removeAll();
+      let data = [
+        {
+          x: 101,
+          y: 255,
+          width: 114,
+          height: 209,
+        },
+        {
+          x: 459,
+          y: 99,
+          width: 123,
+          height: 199,
+        }
+      ]
+      redraw(data);
+    });
+
+    $(document).on('click', '.frame', function(event){
+      let certainId = this.id;
+      let all = $(".frame").map(function() {
+        if (certainId == this.id) {
+          this.style.border = '3px solid red';
+          this.classList.add('selectedicon');
+          let element = document.getElementById(this.id);
+          let children = element.children;
+          for (let i = 0; i < children.length; i++){
+            let child = children[i];
+            child.style.backgroundColor = 'purple';
+            child.style.width = '6px';
+            child.style.height = '6px';
+          }
+        } else {
+          this.style.border = '3px solid yellow';
+          this.classList.remove('selectedicon');
+          let element = document.getElementById(this.id);
+          let children = element.children;
+          for (let i = 0; i < children.length; i++){
+            let child = children[i];
+            child.style.backgroundColor = 'yellow';
+            child.style.width = '0px';
+            child.style.height = '0px';
+          }
+        }
+      }).get();
+    });
+
+		/**
+		 * 创建一个可拖拽的矩形
+		 */
+		function CreateDragRect(elm, options = {}) {
+      console.log('elm', elm)
+			if (!elm) throw new Error('el 必须是一个document对象');
+			this.rect = elm;
+			this.isLeftMove = true;
+			this.isTopMove = true;
+			this.rectDefaultPosition = options.position || 'fixed';
+			this.rectDefaultLeft = options.x || 0;
+			this.rectDefaultTop = options.y || 0;
+			this.rectWidth = options.width || 100;
+			this.rectHeight = options.height || 100;
+			this.rectMinWidth = options.rectMinWidth || 5;  //最小宽度(超过之后不允许再缩放)
+			this.rectMinHeight = options.rectMinHeight || 5;  //最小高度(超过之后不允许再缩放)
+			this.rectBackgroundColor = options.background || 'transparent';
+      this.rectBorder = options.border || '3px solid yellow';
+			this.dragIconSize = options.dragIconSize || '0px';
+			this.dragIconColor = options.dragIconColor || 'yellow';
+			//主矩形是否可以移动
+			this.isMove = false;
+			this.initStyle();
+			this.bindDragEvent(this.rect);
+
+      let certainId = this.id;
+
+      let all = $(".frame").map(function() {
+        if (certainId == this.id) {
+          this.style.border = '3px solid red';
+          this.classList.add('selectedicon');
+          let element = document.getElementById(this.id);
+          let children = element.children;
+          for (let i = 0; i < children.length; i++){
+            let child = children[i];
+            child.style.backgroundColor = 'purple';
+            child.style.width = '6px';
+            child.style.height = '6px';
+          }
+        } else {
+          this.style.border = '3px solid yellow';
+          this.classList.remove('selectedicon');
+          let element = document.getElementById(this.id);
+          let children = element.children;
+          for (let i = 0; i < children.length; i++){
+            let child = children[i];
+            child.style.backgroundColor = 'yellow';
+            child.style.width = '0px';
+            child.style.height = '0px';
+          }
+        }
+      }).get();
+		}
+
+		/**
+		 * 主矩形绑定move事件
+		 */
+		CreateDragRect.prototype.bindDragEvent = function (dom, position) {
+			const _this = this;
+			dom.onmousedown = function (event) {
+				event.stopPropagation();
+				//按下矩形的时候可以移动，否则不可移动
+				_this.isMove = !position;
+				// 获取鼠标在wrapper中的位置
+				let boxX = event.clientX - dom.offsetLeft;
+				let boxY = event.clientY - dom.offsetTop;
+				//鼠标移动事件(如果计算太高,有拖影)
+				document.onmousemove = _this.throttle(function (moveEv) {
+					let ev = moveEv || window.event;
+					ev.stopPropagation();
+					let moveX = ev.clientX - boxX;
+					let moveY = ev.clientY - boxY;
+
+          let certainId = _this.rect.id;
+          let all = $(".frame").map(function() {
+            if (certainId == this.id) {
+              this.style.border = '3px solid red';
+              this.classList.add('selectedicon');
+              let element = document.getElementById(this.id);
+              let children = element.children;
+              for (let i = 0; i < children.length; i++){
+                let child = children[i];
+                child.style.backgroundColor = 'purple';
+                child.style.width = '6px';
+                child.style.height = '6px';
+              }
+            } else {
+              this.style.border = '3px solid yellow';
+              this.classList.remove('selectedicon');
+              let element = document.getElementById(this.id);
+              let children = element.children;
+              for (let i = 0; i < children.length; i++){
+                let child = children[i];
+                child.style.backgroundColor = 'yellow';
+                child.style.width = '0px';
+                child.style.height = '0px';
+              }
+            }
+          }).get();
+
+					switch (position) {
+						case 'top-left':    //左上: 需计算top left width
+							_this.nwRectSize(moveX, moveY);
+							break;
+						case 'top-right':   //右上 计算top 和 height
+							_this.neRectSize(moveX, moveY);
+							break;
+						case 'right-bottom':  //只需计算当前鼠标位置
+							_this.seRectSize(moveX, moveY);
+							break;
+						case 'left-bottom': //计算left偏移量，计算w
+							_this.swRectSize(moveX, moveY);
+							break;
+						default:    //拖拽矩形
+							if (!_this.isMove) return null;
+							_this.moveRect(ev.clientX - boxX, ev.clientY - boxY);
+					}
+				}, 10);
+
+				//鼠标松开，移除事件
+				document.onmouseup = function (event) {
+					document.onmousemove = null;
+					document.onmouseup = null;
+					// 存储当前的rect的宽高
+					_this.rectWidth = _this.rect.offsetWidth;
+					_this.rectHeight = _this.rect.offsetHeight;
+					// 获得当前矩形的offsetLeft 和 offsetTop
+					_this.rectOffsetLeft = _this.rect.offsetLeft;
+					_this.rectOffsetTop = _this.rect.offsetTop;
+				}
+			}
+		}
+
+		/**
+		 * 初始化样式
+		 */
+		CreateDragRect.prototype.initStyle = function () {
+			this.rect.style.position = this.rectDefaultPosition;
+			this.rect.style.width = this.rectWidth + 'px';
+			this.rect.style.height = this.rectHeight + 'px';
+			this.rect.style.left = this.rectDefaultLeft + 'px';
+			this.rect.style.top = this.rectDefaultTop + 'px';
+			this.rect.style.background = this.rectBackgroundColor;
+      this.rect.style.border = this.rectBorder;
+			//依次为上 右 下 左
+			let dragIcons = [
+				{
+					cursor: 'nw-resize',
+					x: 'top',
+					y: 'left'
+				},
+				{
+					cursor: 'ne-resize',
+					x: 'top',
+					y: 'right'
+				},
+				{
+					cursor: 'se-resize',
+					x: 'right',
+					y: 'bottom'
+				},
+				{
+					cursor: 'sw-resize',
+					x: 'left',
+					y: 'bottom'
+				}
+			];
+			for (let i = 0, l = dragIcons.length; i < l; i++) {
+				let icon = document.createElement('i');
+				icon.id = Math.random().toString(36).substring(7);
+				icon.style.display = 'inline-block';
+				icon.style.width = this.dragIconSize;
+				icon.style.height = this.dragIconSize;
+				icon.style.position = 'absolute';
+				icon.style.zIndex = 10;
+				icon.style.cursor = dragIcons[i].cursor;
+				icon.style.backgroundColor = this.dragIconColor;
+        icon.classList.add('selected-icon');
+				icon.style[dragIcons[i].x] = -parseInt(icon.style.width) / 2 + 'px';
+				icon.style[dragIcons[i].y] = -parseInt(icon.style.height) / 2 + 'px';
+				//绑定四个角的拖拽事件
+				this.bindDragEvent(icon, `${dragIcons[i].x}-${dragIcons[i].y}`);
+				//插入到矩形
+				this.rect.appendChild(icon);
+			}
+		};
+
+		/**
+		 * 移动主矩形
+		 */
+		CreateDragRect.prototype.moveRect = function (x, y) {
+      const _this = this;
+			if (this.isTopMove && this.isLeftMove) {
+        if (x < 0) {
+          x = 0;
+        }
+        if (y < 0) {
+          y = 0;
+        }
+        if ((x + _this.rectWidth) > imgWidth) {
+          x = (imgWidth - _this.rectWidth)
+        }
+        if ((y + _this.rectHeight) > imgHeight) {
+          y = (imgHeight - _this.rectHeight)
+        }
+				this.rect.style.left = x + 'px';
+				this.rect.style.top = y + 'px';
+			}
+		};
+
+		/**
+		 * 移动主矩形缩放 - 左上
+		 */
+		CreateDragRect.prototype.nwRectSize = function (x, y) {
+			//计算是否是最小宽度
+			const { width, height, isLeftMove, isTopMove } = this.getMinSize(this.rectWidth - x, this.rectHeight - y);
+			if (isTopMove) {
+        if ((this.rectOffsetTop + y) < 0) {
+          this.rect.style.height = this.rectOffsetTop + this.rectHeight + 'px';
+          this.rect.style.top = '0px';
+        } else {
+          this.rect.style.height = height + 'px';
+          this.rect.style.top = this.rectOffsetTop + y + 'px';
+        }
+			}
+			if (isLeftMove) {
+				this.rect.style.width = width + 'px';
+
+        if ((this.rectOffsetLeft + x) < 0) {
+          this.rect.style.left = '0px';
+          this.rect.style.width = this.rectOffsetLeft + this.rectWidth + 'px';
+        } else {
+          this.rect.style.left = this.rectOffsetLeft + x + 'px';
+        }
+			}
+		};
+
+		/**
+		 * 移动主矩形缩放 - 左下
+		 */
+		CreateDragRect.prototype.swRectSize = function (x, y) {
+			//计算是否是最小宽度
+			const { width, height, isLeftMove, isTopMove } = this.getMinSize(this.rectWidth - x, y);
+			if (isLeftMove) {
+				this.rect.style.width = width + 'px';
+
+        if ((this.rectOffsetLeft + x) < 0) {
+          this.rect.style.left = '0px';
+          this.rect.style.width = this.rectOffsetLeft + this.rectWidth + 'px';
+        } else {
+          this.rect.style.left = this.rectOffsetLeft + x + 'px';
+        }
+			}
+			if (isTopMove) {
+        if ((this.rectOffsetTop + height) > imgHeight) {
+          this.rect.style.height = (imgHeight - this.rectOffsetTop) + 'px';
+        } else {
+          this.rect.style.height = height + 'px';
+        }
+			}
+		};
+
+		/**
+		 * 移动主矩形缩放 - 右上
+		 */
+		CreateDragRect.prototype.neRectSize = function (x, y) {
+			//计算是否是最小宽度
+			let { width, height, isTopMove, isLeftMove } = this.getMinSize(x, this.rectHeight - y);
+      if ((this.rectOffsetLeft + width) > imgWidth) {
+        width = imgWidth - this.rectOffsetLeft;
+      }
+			if (isTopMove) {
+        if ((this.rectOffsetTop + y) < 0) {
+          this.rect.style.height = this.rectOffsetTop + this.rectHeight + 'px';
+          this.rect.style.top = '0px';
+        } else {
+          this.rect.style.height = height + 'px';
+          this.rect.style.top = this.rectOffsetTop + y + 'px';
+        }
+			}
+			if (isLeftMove) {
+				this.rect.style.width = width + 'px';
+			}
+		};
+
+		/**
+		 * 移动主矩形缩放 - 右下
+		 */
+		CreateDragRect.prototype.seRectSize = function (x, y) {
+			//计算是否是最小宽度
+			let { width, height } = this.getMinSize(x, y);
+      if ((this.rectOffsetTop + height) > imgHeight) {
+        height = imgHeight - this.rectOffsetTop;
+      }
+      if ((this.rectOffsetLeft + width) > imgWidth) {
+        width = imgWidth - this.rectOffsetLeft;
+      }
+			this.rect.style.width = width + 'px';
+			this.rect.style.height = height + 'px';
+		};
+
+		/**
+		* 节流函数
+		* @param {*} fn
+		* @param {*} delay
+		*/
+		CreateDragRect.prototype.throttle = function (fn, delay) {
+			let last = 0;
+			return function () {
+				let curr = Date.now();
+				if (curr - last > delay) {
+					fn.apply(this, arguments);
+					last = curr;
+				}
+			}
+		}
+
+		/**
+		 * 获取宽高
+		 * @param {*} w
+		 * @param {*} h
+		 * @return { Object }
+		 */
+		CreateDragRect.prototype.getMinSize = function (w, h) {
+			let rectMinWidth = this.rectMinWidth;
+			let rectMinHeight = this.rectMinHeight;
+			//x拖拽
+			this.isLeftMove = w >= this.rectMinWidth;
+			//y拖拽
+			this.isTopMove = h >= this.rectMinHeight;
+			if (this.isLeftMove) rectMinWidth = w;
+			if (this.isTopMove) rectMinHeight = h;
+			return { width: rectMinWidth, height: rectMinHeight, isLeftMove: this.isLeftMove, isTopMove: this.isTopMove };
+		}
+
+    function removeAll() {
+      let myobjArr = document.getElementsByClassName("frame");
+      for (let i = myobjArr.length - 1; i >= 0; i--){
+        myobjArr[i].remove();
+      }
+    }
+
+    function redraw(data) {
+      for (let i = 0; i < data.length; i++) {
+        let element = document.createElement('DIV');
+        element.id = 'default' + [i];
+        element.classList.add('frame');
+        element.style.cursor = 'move';
+        document.body.appendChild(element)
+
+        let dr = new CreateDragRect(document.getElementById(element.id), {
+          x: data[i].x,
+          y: data[i].y,
+          width: data[i].width,
+          height: data[i].height,
+        });
+        dr.bindDragEvent(document.getElementById(element.id));
+      }
+    }
+</script>
+
+</html>
